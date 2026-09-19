@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VidSrc Player</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #111;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    padding: 10px 16px;
+    background: #1c1c1c;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    border-bottom: 1px solid #333;
+  }
+  .tabs { display: flex; gap: 4px; }
+  .tab {
+    padding: 8px 14px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background: #222;
+    color: #bbb;
+    cursor: pointer;
+  }
+  .tab.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+  input[type="text"] {
+    flex: 1 1 240px;
+    padding: 10px 12px;
+    font-size: 15px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    background: #222;
+    color: #eee;
+  }
+  button {
+    padding: 10px 16px;
+    font-size: 15px;
+    border-radius: 6px;
+    border: none;
+    background: #3b82f6;
+    color: white;
+    cursor: pointer;
+  }
+  button:hover { background: #2563eb; }
+  button.secondary { background: #444; }
+  button.secondary:hover { background: #555; }
+  button:disabled { opacity: .5; cursor: default; }
+
+  /* Menu */
+  .menuWrap { position: relative; }
+  .menuBtn { background: #333; padding: 10px 14px; }
+  .menuBtn:hover { background: #3d3d3d; }
+  .menu {
+    position: absolute;
+    top: 44px;
+    right: 0;
+    background: #1c1c1c;
+    border: 1px solid #333;
+    border-radius: 8px;
+    min-width: 160px;
+    z-index: 30;
+    display: none;
+    overflow: hidden;
+  }
+  .menu.open { display: block; }
+  .menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    color: #eee;
+    border-radius: 0;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+  .menu button:hover { background: #2a2a2a; }
+  .menu button.danger { color: #f87171; }
+
+  #results {
+    position: absolute;
+    top: 62px;
+    left: 16px;
+    right: 16px;
+    max-height: 60vh;
+    overflow-y: auto;
+    background: #1c1c1c;
+    border: 1px solid #333;
+    border-radius: 8px;
+    z-index: 10;
+    display: none;
+  }
+  .result {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #2a2a2a;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    position: relative;
+  }
+  .result:last-child { border-bottom: none; }
+  .result:hover { background: #2a2a2a; }
+  .result img { width: 40px; height: 60px; object-fit: cover; border-radius: 4px; background: #333; }
+  .result .meta { flex: 1; min-width: 0; }
+  .result .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .result .sub { font-size: 12px; color: #aaa; }
+  .result .type { font-size: 11px; background: #333; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+  .star {
+    background: transparent;
+    border: none;
+    color: #666;
+    font-size: 20px;
+    padding: 4px 8px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .star.on { color: #fbbf24; }
+  .star:hover { color: #fbbf24; }
+
+  #library {
+    position: absolute;
+    top: 62px;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    overflow-y: auto;
+    background: #181818;
+    border: 1px solid #333;
+    border-radius: 8px;
+    z-index: 10;
+    display: none;
+    padding: 12px;
+  }
+  .libFilters {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: #222;
+    border: 1px solid #333;
+    color: #bbb;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .pill.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+  .libGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+  }
+  .libCard {
+    background: #1e1e1e;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    border: 1px solid #2a2a2a;
+    transition: border-color .15s;
+  }
+  .libCard:hover { border-color: #3b82f6; }
+  .libCard img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; background: #333; }
+  .libCard .noPoster { width: 100%; aspect-ratio: 2/3; background: #2a2a2a; display: flex; align-items: center; justify-content: center; color: #555; font-size: 12px; }
+  .libCard .cardMeta { padding: 8px; }
+  .libCard .cardTitle { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .libCard .cardSub { font-size: 11px; color: #888; margin-top: 2px; }
+  .libCard .cardStar {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0,0,0,.7);
+    border-radius: 50%;
+    width: 28px; height: 28px;
+    padding: 0;
+    font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .empty {
+    color: #666;
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 14px;
+  }
+
+  #controls {
+    padding: 10px 16px;
+    background: #181818;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    border-bottom: 1px solid #333;
+  }
+  #controls select {
+    padding: 8px;
+    border-radius: 6px;
+    background: #222;
+    color: #eee;
+    border: 1px solid #444;
+  }
+  #selection { font-size: 14px; color: #bbb; margin-left: auto; }
+
+  #playerWrap { flex: 1; position: relative; background: black; }
+  #player {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    border: 0;
+  }
+  #placeholder {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #666; font-size: 15px; text-align: center; padding: 20px;
+  }
+  body.theater #playerWrap { position: fixed; inset: 0; z-index: 100; }
+  body.theater header, body.theater #controls { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tabs">
+    <button class="tab active" data-tab="search">Search</button>
+    <button class="tab" data-tab="library">Library</button>
+  </div>
+  <input id="query" type="text" placeholder="Search a movie or TV show…" autocomplete="off">
+  <button id="searchBtn">Search</button>
+  <div class="menuWrap">
+    <button id="menuBtn" class="menuBtn">⋯</button>
+    <div id="menu" class="menu">
+      <button id="exportBtn">Export library…</button>
+      <button id="importBtn">Import library…</button>
+      <button id="clearBtn" class="danger">Clear all data</button>
+    </div>
+  </div>
+</header>
+
+<input type="file" id="fileInput" accept="application/json" style="display:none">
+
+<div id="results"></div>
+
+<div id="library">
+  <div class="libFilters">
+    <button class="pill active" data-filter="all">All</button>
+    <button class="pill" data-filter="favorites">★ Favorites</button>
+    <button class="pill" data-filter="history">Recently played</button>
+  </div>
+  <div id="libGrid" class="libGrid"></div>
+  <div id="libEmpty" class="empty" style="display:none"></div>
+</div>
+
+<div id="controls">
+  <select id="seasonSelect" style="display:none"></select>
+  <select id="episodeSelect" style="display:none"></select>
+  <button id="playBtn" disabled>Play</button>
+  <button id="theaterBtn" class="secondary" disabled>Fullscreen</button>
+  <span id="selection">No title selected</span>
+</div>
+
+<div id="playerWrap">
+  <div id="placeholder">Search for a movie or TV show to begin.</div>
+  <iframe id="player" allowfullscreen allow="autoplay; fullscreen; encrypted-media"></iframe>
+</div>
+
+<script>
+/* ===================== CONFIG ===================== */
+const TMDB_KEY = "55f064dcecf06549c0d658f74d14d9b5"; // <-- put your key here
+const TMDB = "https://api.themoviedb.org/3";
+const IMG_SMALL = "https://image.tmdb.org/t/p/w92";
+const IMG_CARD  = "https://image.tmdb.org/t/p/w200";
+const VIDSRC = "https://vidsrc.sh/embed";
+
+const HISTORY_MAX = 100;      // prune oldest beyond this
+const SAVE_DEBOUNCE_MS = 400; // debounce localStorage writes
+
+/* ===================== ELEMENTS ===================== */
+const $ = id => document.getElementById(id);
+const queryEl       = $("query");
+const searchBtn     = $("searchBtn");
+const resultsEl     = $("results");
+const libraryEl     = $("library");
+const libGrid       = $("libGrid");
+const libEmpty      = $("libEmpty");
+const seasonSelect  = $("seasonSelect");
+const episodeSelect = $("episodeSelect");
+const playBtn       = $("playBtn");
+const theaterBtn    = $("theaterBtn");
+const selectionEl   = $("selection");
+const player        = $("player");
+const placeholder   = $("placeholder");
+const menuBtn       = $("menuBtn");
+const menu          = $("menu");
+const exportBtn     = $("exportBtn");
+const importBtn     = $("importBtn");
+const clearBtn      = $("clearBtn");
+const fileInput     = $("fileInput");
+
+/* ===================== STATE ===================== */
+let current = null; // { type, tmdbId, imdbId, title, seasons? }
+let activeTab = "search";
+let libFilter = "all";
+
+/* ===================== STORAGE LAYER ===================== */
+const STORAGE_KEY = "vidsrc.library.v1";
+
+// In-memory fallback if localStorage is unavailable (Safari private, etc.)
+let memStore = null;
+
+function storageAvailable() {
+  try {
+    const k = "__t";
+    localStorage.setItem(k, "1");
+    localStorage.removeItem(k);
+    return true;
+  } catch { return false; }
+}
+const HAS_LS = storageAvailable();
+
+function loadLibrary() {
+  if (!HAS_LS) return memStore || { history: [], favorites: [] };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { history: [], favorites: [] };
+    const parsed = JSON.parse(raw);
+    return {
+      history: Array.isArray(parsed.history) ? parsed.history : [],
+      favorites: Array.isArray(parsed.favorites) ? parsed.favorites : []
+    };
+  } catch {
+    return { history: [], favorites: [] };
+  }
+}
+
+let library = loadLibrary();
+let saveTimer = null;
+
+function saveLibrary() {
+  // Debounced write so rapid actions don't thrash localStorage
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (!HAS_LS) { memStore = library; return; }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(library)); }
+    catch (e) { console.warn("Save failed:", e); }
+  }, SAVE_DEBOUNCE_MS);
+}
+
+// Key for dedup: same title = same item
+function keyOf(item) {
+  return `${item.type}:${item.tmdbId}`;
+}
+
+function findHistoryItem(item) {
+  return library.history.find(h => keyOf(h) === keyOf(item));
+}
+function isFavorite(item) {
+  return library.favorites.some(f => keyOf(f) === keyOf(item));
+}
+
+/* ===================== HISTORY / FAVORITES ACTIONS ===================== */
+
+function recordPlay(item, season, episode) {
+  const now = Date.now();
+  const k = keyOf(item);
+  const existing = library.history.find(h => keyOf(h) === k);
+
+  if (existing) {
+    existing.lastPlayedAt = now;
+    existing.title = item.title;
+    if (item.poster) existing.poster = item.poster;
+    if (season != null) existing.lastSeason = season;
+    if (episode != null) existing.lastEpisode = episode;
+  } else {
+    library.history.unshift({
+      type: item.type,
+      tmdbId: item.tmdbId,
+      imdbId: item.imdbId || null,
+      title: item.title,
+      poster: item.poster || null,
+      year: item.year || null,
+      lastSeason: season ?? null,
+      lastEpisode: episode ?? null,
+      addedAt: now,
+      lastPlayedAt: now
+    });
+  }
+
+  // Sort by most recently played, then prune
+  library.history.sort((a, b) => (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0));
+  if (library.history.length > HISTORY_MAX) {
+    library.history = library.history.slice(0, HISTORY_MAX);
+  }
+  saveLibrary();
+}
+
+function toggleFavorite(item) {
+  const k = keyOf(item);
+  const idx = library.favorites.findIndex(f => keyOf(f) === k);
+  if (idx >= 0) {
+    library.favorites.splice(idx, 1);
+    saveLibrary();
+    return false;
+  } else {
+    library.favorites.unshift({
+      type: item.type,
+      tmdbId: item.tmdbId,
+      imdbId: item.imdbId || null,
+      title: item.title,
+      poster: item.poster || null,
+      year: item.year || null,
+      lastSeason: item.lastSeason ?? null,
+      lastEpisode: item.lastEpisode ?? null,
+      addedAt: Date.now()
+    });
+    saveLibrary();
+    return true;
+  }
+}
+
+/* ===================== TABS ===================== */
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => switchTab(t.dataset.tab));
+});
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll(".tab").forEach(t =>
+    t.classList.toggle("active", t.dataset.tab === tab)
+  );
+  if (tab === "library") {
+    resultsEl.style.display = "none";
+    libraryEl.style.display = "block";
+    renderLibrary();
+  } else {
+    libraryEl.style.display = "none";
+  }
+}
+
+/* ===================== SEARCH ===================== */
+searchBtn.addEventListener("click", doSearch);
+queryEl.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+
+async function doSearch() {
+  const q = queryEl.value.trim();
+  if (!q) return;
+  switchTab("search");
+  resultsEl.innerHTML = "<div class='result'>Searching…</div>";
+  resultsEl.style.display = "block";
+
+  try {
+    const url = `${TMDB}/search/multi?api_key=${TMDB_KEY}&query=${encodeURIComponent(q)}&include_adult=false`;
+    const data = await (await fetch(url)).json();
+    const items = (data.results || []).filter(r => r.media_type === "movie" || r.media_type === "tv");
+    if (!items.length) {
+      resultsEl.innerHTML = "<div class='result'>No results.</div>";
+      return;
+    }
+    renderResults(items);
+  } catch (err) {
+    resultsEl.innerHTML = "<div class='result'>Search error: " + err.message + "</div>";
+  }
+}
+
+function renderResults(items) {
+  resultsEl.innerHTML = "";
+  for (const it of items) {
+    const isTV = it.media_type === "tv";
+    const title = it.title || it.name || "Untitled";
+    const date  = (it.release_date || it.first_air_date || "").slice(0, 4);
+    const item = {
+      type: isTV ? "tv" : "movie",
+      tmdbId: it.id,
+      title,
+      poster: it.poster_path || null,
+      year: date || null
+    };
+    const fav = isFavorite(item);
+
+    const div = document.createElement("div");
+    div.className = "result";
+    div.innerHTML = `
+      ${it.poster_path ? `<img src="${IMG_SMALL}${it.poster_path}" alt="">` : `<img alt="">`}
+      <div class="meta">
+        <div class="title">${escapeHtml(title)} <span class="type">${isTV ? "TV" : "Movie"}</span></div>
+        <div class="sub">${date || ""}</div>
+      </div>
+      <button class="star ${fav ? "on" : ""}" title="Favorite">★</button>`;
+
+    div.addEventListener("click", e => {
+      if (e.target.classList.contains("star")) return;
+      pickItem(it);
+    });
+    div.querySelector(".star").addEventListener("click", e => {
+      e.stopPropagation();
+      const on = toggleFavorite(item);
+      e.target.classList.toggle("on", on);
+    });
+    resultsEl.appendChild(div);
+  }
+}
+
+/* ===================== SELECTION ===================== */
+async function pickItem(it) {
+  resultsEl.style.display = "none";
+  resetControls();
+
+  if (it.media_type === "movie") {
+    selectionEl.textContent = "Loading movie…";
+    try {
+      const findUrl = `${TMDB}/movie/${it.id}/external_ids?api_key=${TMDB_KEY}`;
+      const ext = await (await fetch(findUrl)).json();
+      if (!ext.imdb_id) {
+        selectionEl.textContent = "No IMDb ID found for this movie.";
+        return;
+      }
+      current = {
+        type: "movie",
+        tmdbId: it.id,
+        imdbId: ext.imdb_id,
+        title: it.title || it.name,
+        poster: it.poster_path || null,
+        year: (it.release_date || "").slice(0, 4) || null
+      };
+      selectionEl.textContent = current.title;
+      playBtn.disabled = false;
+      theaterBtn.disabled = false;
+      playCurrent();
+    } catch (e) {
+      selectionEl.textContent = "Error: " + e.message;
+    }
+    return;
+  }
+
+  // TV
+  selectionEl.textContent = "Loading show…";
+  try {
+    const detUrl = `${TMDB}/tv/${it.id}?api_key=${TMDB_KEY}`;
+    const details = await (await fetch(detUrl)).json();
+    current = {
+      type: "tv",
+      tmdbId: it.id,
+      title: details.name,
+      poster: details.poster_path || null,
+      year: (details.first_air_date || "").slice(0, 4) || null,
+      seasons: (details.seasons || []).filter(s => s.season_number > 0)
+    };
+    selectionEl.textContent = current.title;
+
+    seasonSelect.innerHTML = "";
+    for (const s of current.seasons) {
+      const opt = document.createElement("option");
+      opt.value = s.season_number;
+      opt.textContent = `Season ${s.season_number}`;
+      seasonSelect.appendChild(opt);
+    }
+    seasonSelect.style.display = current.seasons.length ? "" : "none";
+
+    if (current.seasons.length) {
+      // If we have history for this show, resume at last watched
+      const hist = findHistoryItem(current);
+      const resumeSeason = hist?.lastSeason && current.seasons.some(s => s.season_number === hist.lastSeason)
+        ? hist.lastSeason
+        : current.seasons[0].season_number;
+      seasonSelect.value = resumeSeason;
+      await loadEpisodes(resumeSeason);
+
+      if (hist?.lastEpisode) {
+        const opt = [...episodeSelect.options].find(o => Number(o.value) === Number(hist.lastEpisode));
+        if (opt) episodeSelect.value = hist.lastEpisode;
+      }
+    }
+
+    playBtn.disabled = false;
+    theaterBtn.disabled = false;
+  } catch (e) {
+    selectionEl.textContent = "Error: " + e.message;
+  }
+}
+
+seasonSelect.addEventListener("change", () => loadEpisodes(seasonSelect.value));
+
+async function loadEpisodes(seasonNum) {
+  episodeSelect.innerHTML = "";
+  episodeSelect.style.display = "none";
+  if (!current || current.type !== "tv") return;
+  try {
+    const url = `${TMDB}/tv/${current.tmdbId}/season/${seasonNum}?api_key=${TMDB_KEY}`;
+    const data = await (await fetch(url)).json();
+    const eps = data.episodes || [];
+    for (const ep of eps) {
+      const opt = document.createElement("option");
+      opt.value = ep.episode_number;
+      opt.textContent = `E${ep.episode_number} – ${ep.name || ""}`.trim();
+      episodeSelect.appendChild(opt);
+    }
+    episodeSelect.style.display = eps.length ? "" : "none";
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function resetControls() {
+  seasonSelect.style.display = "none";
+  episodeSelect.style.display = "none";
+  seasonSelect.innerHTML = "";
+  episodeSelect.innerHTML = "";
+  playBtn.disabled = true;
+  theaterBtn.disabled = true;
+  exitTheater();
+}
+
+/* ===================== PLAYBACK ===================== */
+playBtn.addEventListener("click", playCurrent);
+
+function playCurrent() {
+  if (!current) return;
+  let src;
+  let s = null, e = null;
+
+  if (current.type === "movie") {
+    if (!current.imdbId) return;
+    src = `${VIDSRC}/movie/${current.imdbId}`;
+  } else {
+    s = Number(seasonSelect.value || 1);
+    e = Number(episodeSelect.value || 1);
+    src = `${VIDSRC}/tv/${current.tmdbId}/${s}/${e}`;
+  }
+
+  placeholder.style.display = "none";
+  player.src = src;
+  player.style.display = "block";
+
+  // Record to history
+  recordPlay(current, s, e);
+}
+
+theaterBtn.addEventListener("click", () => {
+  document.body.classList.toggle("theater");
+  theaterBtn.textContent = document.body.classList.contains("theater") ? "Exit Fullscreen" : "Fullscreen";
+  setTimeout(() => { player.style.width = player.style.width; }, 50);
+});
+function exitTheater() {
+  document.body.classList.remove("theater");
+  theaterBtn.textContent = "Fullscreen";
+}
+
+/* ===================== LIBRARY RENDER ===================== */
+document.querySelectorAll(".pill").forEach(p => {
+  p.addEventListener("click", () => {
+    libFilter = p.dataset.filter;
+    document.querySelectorAll(".pill").forEach(x =>
+      x.classList.toggle("active", x.dataset.filter === libFilter)
+    );
+    renderLibrary();
+  });
+});
+
+function renderLibrary() {
+  let items = [];
+
+  if (libFilter === "favorites") {
+    items = library.favorites.map(f => ({ ...f, _fav: true }));
+  } else if (libFilter === "history") {
+    items = library.history.map(h => ({ ...h, _fav: isFavorite(h) }));
+  } else {
+    // All: favorites first, then history (deduped)
+    const seen = new Set();
+    for (const f of library.favorites) {
+      seen.add(keyOf(f));
+      items.push({ ...f, _fav: true });
+    }
+    for (const h of library.history) {
+      if (seen.has(keyOf(h))) continue;
+      items.push({ ...h, _fav: false });
+    }
+  }
+
+  libGrid.innerHTML = "";
+
+  if (!items.length) {
+    libEmpty.style.display = "block";
+    libEmpty.textContent = libFilter === "favorites"
+      ? "No favorites yet. Tap the ★ on any search result."
+      : libFilter === "history"
+        ? "Nothing played yet."
+        : "Your library is empty. Search and play something to get started.";
+    return;
+  }
+  libEmpty.style.display = "none";
+
+  for (const item of items) {
+    const card = document.createElement("div");
+    card.className = "libCard";
+
+    const subParts = [];
+    if (item.year) subParts.push(item.year);
+    subParts.push(item.type === "tv" ? "TV" : "Movie");
+    if (item.type === "tv" && item.lastSeason && item.lastEpisode) {
+      subParts.push(`S${item.lastSeason}E${item.lastEpisode}`);
+    }
+
+    card.innerHTML = `
+      ${item.poster
+        ? `<img src="${IMG_CARD}${item.poster}" alt="" loading="lazy">`
+        : `<div class="noPoster">No image</div>`}
+      <button class="star cardStar ${item._fav ? "on" : ""}" title="Favorite">★</button>
+      <div class="cardMeta">
+        <div class="cardTitle" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+        <div class="cardSub">${subParts.join(" · ")}</div>
+      </div>`;
+
+    card.addEventListener("click", ev => {
+      if (ev.target.classList.contains("star")) return;
+      playFromLibrary(item);
+    });
+    card.querySelector(".cardStar").addEventListener("click", ev => {
+      ev.stopPropagation();
+      const on = toggleFavorite(item);
+      ev.target.classList.toggle("on", on);
+      // If we were viewing favorites-only, re-render so it disappears
+      if (libFilter === "favorites") setTimeout(renderLibrary, 150);
+    });
+
+    libGrid.appendChild(card);
+  }
+}
+
+async function playFromLibrary(item) {
+  // Reuse pickItem flow by constructing a TMDB-like object
+  switchTab("search");
+
+  if (item.type === "movie") {
+    await pickItem({
+      media_type: "movie",
+      id: item.tmdbId,
+      title: item.title,
+      poster_path: item.poster,
+      release_date: item.year || ""
+    });
+  } else {
+    await pickItem({
+      media_type: "tv",
+      id: item.tmdbId,
+      name: item.title,
+      poster_path: item.poster,
+      first_air_date: item.year || ""
+    });
+    // pickItem already restored last season/episode if present
+  }
+}
+
+/* ===================== MENU / EXPORT / IMPORT / CLEAR ===================== */
+menuBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  menu.classList.toggle("open");
+});
+document.addEventListener("click", () => menu.classList.remove("open"));
+
+exportBtn.addEventListener("click", () => {
+  menu.classList.remove("open");
+  const blob = new Blob(
+    [JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), library }, null, 2)],
+    { type: "application/json" }
+  );
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `vidsrc-library-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+importBtn.addEventListener("click", () => {
+  menu.classList.remove("open");
+  fileInput.click();
+});
+
+fileInput.addEventListener("change", async e => {
+  const file = e.target.files?.[0];
+  fileInput.value = "";
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const incoming = parsed.library || parsed; // accept both shapes
+
+    const inHist = Array.isArray(incoming.history) ? incoming.history : [];
+    const inFav  = Array.isArray(incoming.favorites) ? incoming.favorites : [];
+
+    if (!inHist.length && !inFav.length) {
+      alert("That file doesn't look like a library export.");
+      return;
+    }
+
+    const mode = confirm(
+      "Import mode:\n\n" +
+      "OK = Merge with existing library\n" +
+      "Cancel = Replace existing library"
+    );
+
+    if (mode) {
+      // Merge by key, keep newest lastPlayedAt
+      const mergeMap = (a, b) => {
+        const map = new Map();
+        for (const it of [...a, ...b]) {
+          const k = keyOf(it);
+          const prev = map.get(k);
+          if (!prev) { map.set(k, it); continue; }
+          const prevT = prev.lastPlayedAt || prev.addedAt || 0;
+          const newT  = it.lastPlayedAt || it.addedAt || 0;
+          map.set(k, newT > prevT ? { ...prev, ...it } : { ...it, ...prev });
+        }
+        return [...map.values()];
+      };
+      library.history   = mergeMap(library.history, inHist)
+        .sort((a,b) => (b.lastPlayedAt||0)-(a.lastPlayedAt||0))
+        .slice(0, HISTORY_MAX);
+      library.favorites = mergeMap(library.favorites, inFav);
+    } else {
+      library.history   = inHist.slice(0, HISTORY_MAX);
+      library.favorites = inFav;
+    }
+
+    saveLibrary();
+    renderLibrary();
+    alert("Import complete.");
+  } catch (err) {
+    alert("Import failed: " + err.message);
+  }
+});
+
+clearBtn.addEventListener("click", () => {
+  menu.classList.remove("open");
+  if (!confirm("Clear ALL history and favorites? This can't be undone.")) return;
+  library = { history: [], favorites: [] };
+  saveLibrary();
+  renderLibrary();
+});
+
+/* ===================== UTILS ===================== */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+/* Warn once if storage is unavailable */
+if (!HAS_LS) {
+  console.warn("localStorage unavailable — history and favorites will only last for this session.");
+}
+</script>
+</body>
+</html>
